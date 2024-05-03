@@ -2955,3 +2955,82 @@ def llama3_function_calling(
     )
     return base_function_calling(end_token="<|eot_id|>", role_prefix="<|start_header_id|>assistant<|end_header_id|>", role_suffix="<|eot_id|>",
                           **locals())
+
+@register_chat_completion_handler("llama3-hermes-function-calling")
+def llama3_hermes_function_calling(
+    llama: llama.Llama,
+    messages: List[llama_types.ChatCompletionRequestMessage],
+    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
+    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
+    tools: Optional[List[llama_types.ChatCompletionTool]] = None,
+    tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+    temperature: float = 0.2,
+    top_p: float = 0.95,
+    top_k: int = 40,
+    min_p: float = 0.05,
+    typical_p: float = 1.0,
+    stream: bool = False,
+    stop: Optional[Union[str, List[str]]] = [],
+    response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
+    max_tokens: Optional[int] = None,
+    presence_penalty: float = 0.0,
+    frequency_penalty: float = 0.0,
+    repeat_penalty: float = 1.1,
+    tfs_z: float = 1.0,
+    mirostat_mode: int = 0,
+    mirostat_tau: float = 5.0,
+    mirostat_eta: float = 0.1,
+    model: Optional[str] = None,
+    logits_processor: Optional[llama.LogitsProcessorList] = None,
+    grammar: Optional[llama.LlamaGrammar] = None,
+    logprobs: Optional[bool] = None,
+    top_logprobs: Optional[int] = None,
+    **kwargs,  # type: ignore
+) -> Union[
+    llama_types.CreateChatCompletionResponse,
+    Iterator[llama_types.CreateChatCompletionStreamResponse],
+]:
+    function_calling_template = (
+        "{% if tool_calls %}"
+        "<|im_start|>system\n\n"
+        "{% for message in messages %}"
+        "{% if message.role == 'system' %}"
+        "{{ message.content }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "You have access to the following functions to help you respond to users messages: \n"
+        "{% for tool in tools %}"
+        "\nfunctions.{{ tool.function.name }}:\n"
+        "{{ tool.function.parameters | tojson }}"
+        "\n{% endfor %}"
+        "\nYou can respond to user messages either by sending a single message or by making one or more function calls. You should never do both. Always prioritize function calls over messages."
+        "\nTo send a response message, start your message with 'message:'"
+        '\nExample of sending a message: message: "Hello, how can I help you?"'
+        "\nTo use one or more function calls, start your response with 'functions.<function_name>:', follow this format:"
+        "\nfunctions.<function_name>:"
+        '\n{ "arg1": "value1", "arg2": "value2" }'
+        "\nfunctions.<function_name>:"
+        '\n{ "arg1": "value1", "arg2": "value2" }'
+        "\nWhen you have completed entering function calls, end your output with '</done>'."
+        '\nStart your output with either "message:" or "functions.". Do not mix the two.'
+        "{% endif %}"
+        "<|im_end|>\n"
+        "{% for message in messages %}"
+        "{% if message.role == 'tool'%}"
+        "<|im_start|>tool\n\n"
+        "<tool_response> {{ message.content | default('No response available') }} </tool_response>"
+        "<|im_end|>\n"
+        "{% elif message.role == 'assistant' and message.function_call is defined%}"
+        "<|im_start|>assistant\n\n"
+        "<tool_call> {{ message.function_call | default('No name') }} </tool_call>\n"
+        "<|im_end|>\n"
+        "{% elif message.role != 'system' %}"
+        "<|im_start|>{ message.role }}\n\n"
+        "{{ message.content }}"
+        "<|im_end|>\n"
+        "{% endif %}"
+        "{% endfor %}"
+
+    )
+    return base_function_calling(end_token="<|eot_id|>", role_prefix="<|start_header_id|>assistant<|end_header_id|>", role_suffix="<|eot_id|>",
+                          **locals())
